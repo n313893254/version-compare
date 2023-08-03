@@ -1,0 +1,104 @@
+#!/bin/bash
+source config
+
+if [ -z "$repo_dir" ]; then
+  echo "Please enter the harvester repo directory:"
+  read repo_dir
+fi
+
+if [ -z "$target" ]; then
+  echo "Please enter the target branch:"
+  read target
+fi
+
+if [ -z "$head" ]; then
+  echo "Please enter the head branch:"
+  read head
+fi
+
+ignore=(
+  "pkg/" 
+  "^\."
+  "storybook/"
+  "yarn.lock"
+  "cypress/"
+  "docusaurus/"
+  "shell/assets/"
+  "shell/chart/"
+  "shell/cloud-credential"
+  "shell/config/product/"
+  "shell/content/"
+  "shell/types"
+  "shell/creators/"
+  "shell/detail/"
+  "shell/edit/"
+  "shell/initialize/"
+  "shell/list/"
+  "shell/machine-config/"
+  "shell/public/"
+  "shell/scripts/"
+  "shell/server/"
+  "shell/static/"
+  "scripts/"
+  ".*/__tests__/"
+  ".*\.test\.ts$"
+  "shell/chart/"
+  "shell/models/"
+  "shell/components/AwsComplianceBanner.vue"
+  "shell/components/auth/AzureWarning.vue"
+  "shell/components/fleet/"
+  "shell/pages/c/_cluster/"
+  "shell/pages/rio/"
+  "shell/pages/docs/"
+)
+
+whitelist=(
+  "shell/cloud-credential/harvester.vue"
+  "shell/detail/harvesterhci.io.management.cluster.vue"
+  "shell/detail/namespace.vue"
+  "shell/edit/namespace.vue"
+  "shell/edit/storage.k8s.io.storageclass/provisioners/driver.harvesterhci.io.vue"
+  "shell/edit/service.vue"
+  "shell/list/harvesterhci.io.management.cluster.vue"
+  "shell/list/namespace"
+  "shell/models/namespace.js"
+  "shell/pages/c/_cluster/_product/"
+  "shell/assets/translations/"
+  "pkg/harvester-manager/"
+  "pkg/rancher-components/"
+)
+
+current_dir="$PWD"
+
+cd $repo_dir
+
+git checkout $head
+
+regex=$(printf "|^%s" "${ignore[@]}")
+regex=${regex:1}
+
+files=$(git diff $target --name-only | grep -vE "$regex")
+
+for file in "${whitelist[@]}"; do
+  if git diff --name-only $target | grep -q "^$file"; then
+    files+=$'\n'"$file"
+  fi
+done
+
+rm -rf compare
+mkdir -p compare/head
+mkdir -p compare/target
+
+git checkout $target
+
+rsync -av --relative $files "$current_dir/compare/target/"
+
+git checkout $head
+
+rsync -av --relative $files "$current_dir/compare/head/"
+
+echo "Compared $target to $head:"
+
+cd $current_dir
+
+meld compare/head compare/target 
